@@ -1,6 +1,6 @@
 # edge-expo-ansible
 
-[![Lint](https://github.com/spectronauts/edge-expo-ansible/actions/workflows/lint.yml/badge.svg)](https://github.com/spectronauts/edge-expo-ansible/actions/workflows/lint.yml)
+[![Lint](https://github.com/spectronauts/edge-expo-ansible/actions/workflows/lint.yml/badge.svg?branch=main)](https://github.com/spectronauts/edge-expo-ansible/actions/workflows/lint.yml)
 
 edge-expo-ansible is Ansible automation for SpectroCloud Palette Agent installation.
 
