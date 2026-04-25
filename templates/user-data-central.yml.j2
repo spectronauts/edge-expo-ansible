@@ -1,0 +1,49 @@
+#cloud-config
+install:
+  reboot: true
+  poweroff: false
+
+stylus:
+  vip:
+    skip: {{ 'true' if palette_vip_skip else 'false' }}
+  site:
+    edgeHostToken: {{ palette_registration_token | quote }}
+    paletteEndpoint: {{ palette_endpoint_host | quote }}
+{% if palette_project_name | default('') | length > 0 %}
+    projectName: {{ palette_project_name | quote }}
+{% endif %}
+{% if palette_site_extra | default({}) | length > 0 %}
+{{ palette_site_extra | to_nice_yaml(indent=2) | indent(4, true) }}
+{% endif %}
+{% if palette_external_registries | default([]) | length > 0 or palette_registry_mapping_rules | default({}) | length > 0 %}
+  externalRegistries:
+{% if palette_external_registries | default([]) | length > 0 %}
+    registries:
+{{ palette_external_registries | to_nice_yaml(indent=2) | indent(6, true) }}
+{% endif %}
+{% if palette_registry_mapping_rules | default({}) | length > 0 %}
+    registryMappingRules:
+{{ palette_registry_mapping_rules | to_nice_yaml(indent=2) | indent(6, true) }}
+{% endif %}
+{% endif %}
+{% if palette_stylus_extra | default({}) | length > 0 %}
+{{ palette_stylus_extra | to_nice_yaml(indent=2) | indent(2, true) }}
+{% endif %}
+
+stages:
+  initramfs:
+    - users:
+        {{ palette_os_user }}:
+          groups:
+{{ palette_os_user_groups | to_nice_yaml(indent=2) | indent(12, true) }}
+          passwd: {{ palette_os_user_password | quote }}
+      name: "Configure user"
+{% if palette_vmxnet3_workaround_enabled %}
+    - name: "Disable UDP segmentation"
+      commands:
+        - ethtool --offload {{ palette_vmxnet3_interface | quote }} tx-udp_tnl-segmentation off
+        - ethtool --offload {{ palette_vmxnet3_interface | quote }} tx-udp_tnl-csum-segmentation off
+{% endif %}
+{% if palette_userdata_extra_initramfs | default([]) | length > 0 %}
+{{ palette_userdata_extra_initramfs | to_nice_yaml(indent=2) | indent(4, true) }}
+{% endif %}

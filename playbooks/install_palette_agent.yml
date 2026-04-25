@@ -1,0 +1,467 @@
+---
+- name: Bootstrap Python on target hosts
+  hosts: palette_edge_hosts
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Ensure Python 3 is available for Ansible modules # noqa: fqcn[action-core]
+      raw: >
+        set -e;
+        if command -v python3 >/dev/null 2>&1; then exit 0; fi;
+        if command -v apt-get >/dev/null 2>&1; then
+          apt-get update &&
+          DEBIAN_FRONTEND=noninteractive apt-get install -y python3;
+          exit 0;
+        fi;
+        if command -v dnf >/dev/null 2>&1; then
+          dnf install -y python3; exit 0;
+        fi;
+        if command -v yum >/dev/null 2>&1; then
+          yum install -y python3; exit 0;
+        fi;
+        echo "python3 is required and no supported package manager was detected" >&2;
+        exit 1
+      changed_when: false
+
+- name: Install Spectro Cloud Palette agent host
+  hosts: palette_edge_hosts
+  gather_facts: true
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/secrets.yml
+  vars:
+    palette_arch_map:
+      x86_64: amd64
+      amd64: amd64
+      aarch64: arm64
+      arm64: arm64
+    palette_ubuntu_packages:
+      - bash
+      - conntrack
+      - curl
+      - ethtool
+      - iptables
+      - jq
+      - rsync
+      - rsyslog
+      - systemd-timesyncd
+      - zstd
+    palette_rocky_packages:
+      - bash
+      - conntrack-tools
+      - curl
+      - ethtool
+      - iptables
+      - jq
+      - rsync
+      - rsyslog
+      - zstd
+    palette_rocky_fips_packages:
+      - audit
+      - checkpolicy
+      - policycoreutils-python-utils
+      - selinux-policy-devel
+    palette_firewalld_ports:
+      - 6443/tcp
+      - 2379-2380/tcp
+      - 10250/tcp
+      - 10257-10259/tcp
+      - 10255/tcp
+      - 30000-32767/tcp
+      - 8472/udp
+      - 4240/tcp
+      - 6081/udp
+      - 51871/udp
+      - 9962/tcp
+      - 9963/tcp
+      - 53/tcp
+      - 53/udp
+      - 443/tcp
+  pre_tasks:
+    - name: Validate high-level variables
+      assert:
+        that:
+          - palette_management_mode in ['central', 'local']
+          - palette_instance_type in ['saas', 'private']
+          - >-
+            not palette_vmxnet3_workaround_enabled
+            or palette_vmxnet3_interface | length > 0
+          - >-
+            palette_management_mode != 'central'
+            or palette_registration_token | default('') | length > 0
+          - >-
+            palette_management_mode != 'local'
+            or palette_agent_version | default('') | length > 0
+            or palette_api_key | default('') | length > 0
+          - ansible_architecture in palette_arch_map
+        fail_msg: Review group_vars and secrets before running the playbook.
+
+    - name: Normalize Palette endpoint and architecture values
+      set_fact:
+        palette_endpoint_host: >-
+          {{
+            palette_endpoint
+            | regex_replace('^https?://', '')
+            | regex_replace('/.*$', '')
+          }}
+        palette_endpoint_url: >-
+          {{
+            palette_endpoint
+            if (palette_endpoint | regex_search('^https?://'))
+            else 'https://' ~ (palette_endpoint | regex_replace('/.*$', ''))
+          }}
+        palette_release_arch: "{{ palette_arch_map[ansible_architecture] }}"
+        palette_proxy_env: >-
+          {{
+            {}
+            | combine(
+                (palette_http_proxy | default('') | length > 0)
+                | ternary(
+                    {
+                      'http_proxy': palette_http_proxy,
+                      'HTTP_PROXY': palette_http_proxy,
+                    },
+                    {}
+                  )
+              )
+            | combine(
+                (palette_https_proxy | default('') | length > 0)
+                | ternary(
+                    {
+                      'https_proxy': palette_https_proxy,
+                      'HTTPS_PROXY': palette_https_proxy,
+                    },
+                    {}
+                  )
+              )
+          }}
+
+    - name: Refresh apt cache on Debian-based hosts
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == 'Debian'
+
+    - name: Refresh dnf cache on RedHat-based hosts
+      dnf:
+        update_cache: true
+      when: ansible_os_family == 'RedHat'
+
+  tasks:
+    - name: Install SpectroCloud prerequisites on Debian-based hosts
+      apt:
+        name: "{{ palette_ubuntu_packages }}"
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Install SpectroCloud prerequisites on RedHat-based hosts
+      dnf:
+        name: >-
+          {{
+            palette_rocky_packages
+            + (
+                (palette_use_fips
+                 and ansible_distribution in ['Rocky', 'RedHat'])
+                | ternary(palette_rocky_fips_packages, [])
+              )
+          }}
+        state: present
+      when: ansible_os_family == 'RedHat'
+
+    - name: Ensure installation work directory exists
+      file:
+        path: "{{ palette_install_workdir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Query Palette for stylus version when needed
+      uri:
+        url: "{{ palette_endpoint_url }}/v1/services/stylus/version"
+        method: GET
+        headers:
+          Content-Type: application/json
+          Apikey: "{{ palette_api_key }}"
+        return_content: true
+      environment: "{{ palette_proxy_env }}"
+      register: palette_stylus_version
+      when:
+        - >-
+          palette_instance_type == 'private'
+          or palette_management_mode == 'local'
+        - palette_agent_version | default('') | length == 0
+
+    - name: Derive Palette agent version
+      set_fact:
+        palette_effective_agent_version: >-
+          {{
+            palette_agent_version
+            if (palette_agent_version | default('') | length > 0)
+            else (
+              palette_stylus_version.json.spec.latestVersion.content
+              | regex_findall('version: ([^\n]+)')
+              | first
+              if not (palette_stylus_version.skipped | default(false))
+              else ''
+            )
+          }}
+
+    - name: Normalize Palette release tag
+      set_fact:
+        palette_release_tag: >-
+          {{
+            ''
+            if (palette_effective_agent_version | default('') | length == 0)
+            else (
+              'v'
+              ~ (palette_effective_agent_version | regex_replace('^v', ''))
+            )
+          }}
+
+    - name: Compute installer and tarball filenames
+      set_fact:
+        palette_installer_script: >-
+          {{
+            'palette-agent-install-fips.sh'
+            if palette_use_fips
+            else 'palette-agent-install.sh'
+          }}
+        palette_tarball_name: >-
+          {{
+            ('agent-mode-fips-linux-' if palette_use_fips else 'agent-mode-linux-')
+            ~ palette_release_arch ~ '.tar'
+          }}
+
+    - name: Configure SELinux for Rocky Linux FIPS installs
+      when:
+        - palette_use_fips
+        - ansible_distribution == 'Rocky'
+      block:
+        - name: Check current rsync SELinux boolean
+          command: getsebool rsync_full_access
+          register: palette_rsync_sebool
+          changed_when: false
+
+        - name: Enable full rsync SELinux access
+          command: setsebool -P rsync_full_access 1
+          when: "' --> on' not in palette_rsync_sebool.stdout"
+          changed_when: true
+
+        - name: Install rsync SELinux override policy source
+          copy:
+            dest: /root/rsync_dac_override.te
+            mode: '0644'
+            content: |
+              module rsync_dac_override 1.0;
+
+              require {
+                type default_t;
+                type rsync_t;
+                class capability dac_override;
+                class dir read;
+              }
+
+              allow rsync_t default_t:dir read;
+              allow rsync_t self:capability dac_override;
+
+        - name: Compile rsync SELinux module
+          command:
+            cmd: >-
+              checkmodule -M -m
+              --output /root/rsync_dac_override.mod
+              /root/rsync_dac_override.te
+            creates: /root/rsync_dac_override.mod
+
+        - name: Package rsync SELinux module
+          command:
+            cmd: >-
+              semodule_package --outfile /root/rsync_dac_override.pp
+              -m /root/rsync_dac_override.mod
+            creates: /root/rsync_dac_override.pp
+
+        - name: Install rsync SELinux module
+          shell: |
+            set -o pipefail
+            if semodule -l | awk '{print $1}' \
+              | grep -qx rsync_dac_override; then
+              echo already-installed
+              exit 0
+            fi
+            semodule --install /root/rsync_dac_override.pp
+            echo installed
+          args:
+            executable: /bin/bash
+          register: palette_semodule_install
+          changed_when: "'installed' in palette_semodule_install.stdout"
+
+        - name: Check current cgroup version
+          command: stat -fc %T /sys/fs/cgroup
+          register: palette_cgroup_fs
+          changed_when: false
+
+        - name: Enable cgroup v2 in grub when required
+          shell: |
+            set -e
+            if grep -q 'systemd.unified_cgroup_hierarchy=1' \
+              /etc/default/grub; then
+              echo already-set
+              exit 0
+            fi
+            sed -i.bak \
+              '/^GRUB_CMDLINE_LINUX=/ \
+              s/"$/ systemd.unified_cgroup_hierarchy=1"/' \
+              /etc/default/grub
+            grub2-mkconfig -o /boot/grub2/grub.cfg
+            echo updated
+          args:
+            executable: /bin/bash
+          register: palette_grub_update
+          changed_when: "'updated' in palette_grub_update.stdout"
+          when: palette_cgroup_fs.stdout != 'cgroup2fs'
+
+        - name: Reboot after enabling cgroup v2
+          reboot:
+            reboot_timeout: "{{ palette_reboot_timeout }}"
+            connect_timeout: 30
+            post_reboot_delay: 15
+          when:
+            - palette_cgroup_fs.stdout != 'cgroup2fs'
+            - palette_grub_update is defined
+            - palette_grub_update.changed
+
+    - name: Gather service facts before optional firewalld changes
+      service_facts:
+      when:
+        - palette_use_fips
+        - palette_configure_cilium_firewalld
+        - ansible_os_family == 'RedHat'
+
+    - name: Configure firewalld for Cilium on Rocky Linux FIPS installs
+      when:
+        - palette_use_fips
+        - palette_configure_cilium_firewalld
+        - ansible_os_family == 'RedHat'
+        - "'firewalld.service' in ansible_facts.services"
+      block:
+        - name: Open required firewalld ports
+          command: >-
+            firewall-cmd --permanent
+            --zone={{ palette_cilium_firewalld_zone }}
+            --add-port={{ item }}
+          loop: "{{ palette_firewalld_ports }}"
+          changed_when: true
+
+        - name: Allow ESP protocol for IPsec
+          command: >-
+            firewall-cmd --permanent
+            --zone={{ palette_cilium_firewalld_zone }}
+            --add-protocol=esp
+          changed_when: true
+
+        - name: Allow NAT masquerading
+          command: firewall-cmd --permanent --add-masquerade
+          changed_when: true
+
+        - name: Reload firewalld
+          command: firewall-cmd --reload
+          changed_when: true
+
+    - name: Render central management user-data
+      template:
+        src: user-data-central.yml.j2
+        dest: "{{ palette_install_workdir }}/user-data"
+        mode: '0600'
+      when: palette_management_mode == 'central'
+
+    - name: Render local management user-data
+      template:
+        src: user-data-local.yml.j2
+        dest: /var/lib/spectro/userdata
+        mode: '0600'
+      when: palette_management_mode == 'local'
+
+    - name: Download central management installer for Palette SaaS
+      get_url:
+        url: "https://github.com/spectrocloud/agent-mode/releases/latest/download/{{ palette_installer_script }}"
+        dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
+        mode: '0755'
+      environment: "{{ palette_proxy_env }}"
+      when:
+        - palette_management_mode == 'central'
+        - palette_instance_type == 'saas'
+
+    - name: Download central management installer for private Palette
+      get_url:
+        url: "https://github.com/spectrocloud/agent-mode/releases/download/{{ palette_release_tag }}/{{ palette_installer_script }}"
+        dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
+        mode: '0755'
+      environment: "{{ palette_proxy_env }}"
+      when:
+        - palette_management_mode == 'central'
+        - palette_instance_type == 'private'
+
+    - name: Launch central management installer in the background
+      shell: >-
+        nohup {{ palette_install_workdir }}/{{ palette_installer_script }}
+        >/var/log/palette-agent-install.log 2>&1 &
+      args:
+        executable: /bin/bash
+      environment: >-
+        {{
+          palette_proxy_env
+          | combine({'USERDATA': palette_install_workdir ~ '/user-data'})
+        }}
+      changed_when: true
+      when: palette_management_mode == 'central'
+
+    - name: Wait for the host to disconnect during central management install
+      wait_for:
+        host: "{{ ansible_host | default(inventory_hostname) }}"
+        port: 22
+        state: stopped
+        delay: 15
+        timeout: "{{ palette_reboot_timeout }}"
+      delegate_to: localhost
+      become: false
+      when:
+        - palette_management_mode == 'central'
+        - palette_wait_for_reboot
+
+    - name: Wait for the host to return after central management install
+      wait_for_connection:
+        delay: 20
+        timeout: "{{ palette_reboot_timeout }}"
+        connect_timeout: 30
+      when:
+        - palette_management_mode == 'central'
+        - palette_wait_for_reboot
+
+    - name: Download local management airgap tarball
+      get_url:
+        url: "https://github.com/spectrocloud/agent-mode/releases/download/{{ palette_release_tag }}/{{ palette_tarball_name }}"
+        dest: "{{ palette_local_tarball_dir }}/{{ palette_tarball_name }}"
+        mode: '0644'
+      environment: "{{ palette_proxy_env }}"
+      when: palette_management_mode == 'local'
+
+    - name: Extract local management airgap tarball to root
+      unarchive:
+        src: "{{ palette_local_tarball_dir }}/{{ palette_tarball_name }}"
+        dest: /
+        remote_src: true
+      when: palette_management_mode == 'local'
+
+    - name: Reboot into local management installer flow
+      reboot:
+        reboot_timeout: "{{ palette_reboot_timeout }}"
+        connect_timeout: 30
+        post_reboot_delay: 15
+      when: palette_management_mode == 'local'
+
+    - name: Summarize next validation step
+      debug:
+        msg: >-
+          Host preparation is complete. Validate registration in Palette
+          for central mode,
+          or use Local UI for local mode.
+          Follow the SpectroCloud post-install workflow.

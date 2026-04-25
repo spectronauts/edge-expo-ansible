@@ -1,0 +1,7 @@
+---
+# This project targets Ansible 2.9, which does not support FQCN module names
+# (ansible.builtin.*). Bare module names are required for compatibility.
+profile: production
+warn_list: []
+skip_list:
+  - fqcn[action-core]

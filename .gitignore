@@ -1,0 +1,3 @@
+group_vars/secrets.yml
+*.retry
+artifacts/
