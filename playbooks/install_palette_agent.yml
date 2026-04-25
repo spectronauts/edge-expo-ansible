@@ -4,8 +4,8 @@
   gather_facts: false
   become: true
   tasks:
-    - name: Ensure Python 3 is available for Ansible modules # noqa: fqcn[action-core]
-      raw: >
+    - name: Ensure Python 3 is available for Ansible modules
+      ansible.builtin.raw: >
         set -e;
         if command -v python3 >/dev/null 2>&1; then exit 0; fi;
         if command -v apt-get >/dev/null 2>&1; then
@@ -19,7 +19,7 @@
         if command -v yum >/dev/null 2>&1; then
           yum install -y python3; exit 0;
         fi;
-        echo "python3 is required and no supported package manager was detected" >&2;
+        echo "python3 is required and no supported package manager found" >&2;
         exit 1
       changed_when: false
 
@@ -228,7 +228,11 @@
           }}
         palette_tarball_name: >-
           {{
-            ('agent-mode-fips-linux-' if palette_use_fips else 'agent-mode-linux-')
+            (
+              'agent-mode-fips-linux-'
+              if palette_use_fips
+              else 'agent-mode-linux-'
+            )
             ~ palette_release_arch ~ '.tar'
           }}
 
@@ -382,7 +386,11 @@
 
     - name: Download central management installer for Palette SaaS
       get_url:
-        url: "https://github.com/spectrocloud/agent-mode/releases/latest/download/{{ palette_installer_script }}"
+        url: >-
+          {{
+            'https://github.com/spectrocloud/agent-mode/releases/latest/download/'
+            ~ palette_installer_script
+          }}
         dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
         mode: '0755'
       environment: "{{ palette_proxy_env }}"
@@ -392,7 +400,11 @@
 
     - name: Download central management installer for private Palette
       get_url:
-        url: "https://github.com/spectrocloud/agent-mode/releases/download/{{ palette_release_tag }}/{{ palette_installer_script }}"
+        url: >-
+          {{
+            'https://github.com/spectrocloud/agent-mode/releases/download/'
+            ~ palette_release_tag ~ '/' ~ palette_installer_script
+          }}
         dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
         mode: '0755'
       environment: "{{ palette_proxy_env }}"
@@ -438,7 +450,11 @@
 
     - name: Download local management airgap tarball
       get_url:
-        url: "https://github.com/spectrocloud/agent-mode/releases/download/{{ palette_release_tag }}/{{ palette_tarball_name }}"
+        url: >-
+          {{
+            'https://github.com/spectrocloud/agent-mode/releases/download/'
+            ~ palette_release_tag ~ '/' ~ palette_tarball_name
+          }}
         dest: "{{ palette_local_tarball_dir }}/{{ palette_tarball_name }}"
         mode: '0644'
       environment: "{{ palette_proxy_env }}"
