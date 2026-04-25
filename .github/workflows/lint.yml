@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-lint yamllint
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ansible-lint
+        run: ansible-lint playbooks/install_palette_agent.yml
+
+      - name: Run yamllint
+        run: yamllint playbooks/install_palette_agent.yml group_vars/all.yml inventory/hosts.yml
+
+      - name: Run shellcheck
+        run: shellcheck bootstrap/install-ansible.sh
