@@ -1,7 +1,4 @@
 #cloud-config
-install:
-  reboot: true
-  poweroff: false
 
 stylus:
   vip:
@@ -28,22 +25,4 @@ stylus:
 {% endif %}
 {% if palette_stylus_extra | default({}) | length > 0 %}
 {{ palette_stylus_extra | to_nice_yaml(indent=2) | indent(2, true) }}
-{% endif %}
-
-stages:
-  initramfs:
-    - users:
-        {{ palette_os_user }}:
-          groups:
-{{ palette_os_user_groups | to_nice_yaml(indent=2) | indent(12, true) }}
-          passwd: {{ palette_os_user_password | quote }}
-      name: "Configure user"
-{% if palette_vmxnet3_workaround_enabled %}
-    - name: "Disable UDP segmentation"
-      commands:
-        - ethtool --offload {{ palette_vmxnet3_interface | quote }} tx-udp_tnl-segmentation off
-        - ethtool --offload {{ palette_vmxnet3_interface | quote }} tx-udp_tnl-csum-segmentation off
-{% endif %}
-{% if palette_userdata_extra_initramfs | default([]) | length > 0 %}
-{{ palette_userdata_extra_initramfs | to_nice_yaml(indent=2) | indent(4, true) }}
 {% endif %}

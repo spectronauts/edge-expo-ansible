@@ -1,35 +1,20 @@
 ---
+# This repository only supports Palette SaaS central agent mode installs.
 palette_management_mode: central
-palette_instance_type: saas
 palette_endpoint: api.spectrocloud.com
 palette_project_name: Default
 palette_use_fips: false
 palette_vip_skip: false
 
-palette_os_user: kairos
-palette_os_user_password: kairos
-palette_os_user_groups:
-  - sudo
-
 palette_http_proxy: ""
 palette_https_proxy: ""
-
-palette_agent_version: ""
 palette_install_workdir: /opt/palette-agent
-palette_local_tarball_dir: /tmp
-
-palette_wait_for_reboot: true
-palette_reboot_timeout: 1800
 
 palette_external_registries: []
 palette_registry_mapping_rules: {}
 
 palette_site_extra: {}
 palette_stylus_extra: {}
-palette_userdata_extra_initramfs: []
-
-palette_vmxnet3_workaround_enabled: false
-palette_vmxnet3_interface: ""
 
 palette_configure_cilium_firewalld: false
 palette_cilium_firewalld_zone: public

@@ -31,11 +31,6 @@
     - ../group_vars/all.yml
     - ../group_vars/secrets.yml
   vars:
-    palette_arch_map:
-      x86_64: amd64
-      amd64: amd64
-      aarch64: arm64
-      arm64: arm64
     palette_ubuntu_packages:
       - bash
       - conntrack
@@ -82,20 +77,9 @@
     - name: Validate high-level variables
       assert:
         that:
-          - palette_management_mode in ['central', 'local']
-          - palette_instance_type in ['saas', 'private']
-          - >-
-            not palette_vmxnet3_workaround_enabled
-            or palette_vmxnet3_interface | length > 0
-          - >-
-            palette_management_mode != 'central'
-            or palette_registration_token | default('') | length > 0
-          - >-
-            palette_management_mode != 'local'
-            or palette_agent_version | default('') | length > 0
-            or palette_api_key | default('') | length > 0
-          - ansible_architecture in palette_arch_map
-        fail_msg: Review group_vars and secrets before running the playbook.
+          - palette_management_mode == 'central'
+          - palette_registration_token | default('') | length > 0
+        fail_msg: Review group_vars and secrets before running the SaaS central agent mode playbook.
 
     - name: Normalize Palette endpoint and architecture values
       set_fact:
@@ -105,13 +89,6 @@
             | regex_replace('^https?://', '')
             | regex_replace('/.*$', '')
           }}
-        palette_endpoint_url: >-
-          {{
-            palette_endpoint
-            if (palette_endpoint | regex_search('^https?://'))
-            else 'https://' ~ (palette_endpoint | regex_replace('/.*$', ''))
-          }}
-        palette_release_arch: "{{ palette_arch_map[ansible_architecture] }}"
         palette_proxy_env: >-
           {{
             {}
@@ -175,65 +152,13 @@
         state: directory
         mode: '0755'
 
-    - name: Query Palette for stylus version when needed
-      uri:
-        url: "{{ palette_endpoint_url }}/v1/services/stylus/version"
-        method: GET
-        headers:
-          Content-Type: application/json
-          Apikey: "{{ palette_api_key }}"
-        return_content: true
-      environment: "{{ palette_proxy_env }}"
-      register: palette_stylus_version
-      when:
-        - >-
-          palette_instance_type == 'private'
-          or palette_management_mode == 'local'
-        - palette_agent_version | default('') | length == 0
-
-    - name: Derive Palette agent version
-      set_fact:
-        palette_effective_agent_version: >-
-          {{
-            palette_agent_version
-            if (palette_agent_version | default('') | length > 0)
-            else (
-              palette_stylus_version.json.spec.latestVersion.content
-              | regex_findall('version: ([^\n]+)')
-              | first
-              if not (palette_stylus_version.skipped | default(false))
-              else ''
-            )
-          }}
-
-    - name: Normalize Palette release tag
-      set_fact:
-        palette_release_tag: >-
-          {{
-            ''
-            if (palette_effective_agent_version | default('') | length == 0)
-            else (
-              'v'
-              ~ (palette_effective_agent_version | regex_replace('^v', ''))
-            )
-          }}
-
-    - name: Compute installer and tarball filenames
+    - name: Compute installer filename
       set_fact:
         palette_installer_script: >-
           {{
             'palette-agent-install-fips.sh'
             if palette_use_fips
             else 'palette-agent-install.sh'
-          }}
-        palette_tarball_name: >-
-          {{
-            (
-              'agent-mode-fips-linux-'
-              if palette_use_fips
-              else 'agent-mode-linux-'
-            )
-            ~ palette_release_arch ~ '.tar'
           }}
 
     - name: Configure SELinux for Rocky Linux FIPS installs
@@ -375,14 +300,6 @@
         src: user-data-central.yml.j2
         dest: "{{ palette_install_workdir }}/user-data"
         mode: '0600'
-      when: palette_management_mode == 'central'
-
-    - name: Render local management user-data
-      template:
-        src: user-data-local.yml.j2
-        dest: /var/lib/spectro/userdata
-        mode: '0600'
-      when: palette_management_mode == 'local'
 
     - name: Download central management installer for Palette SaaS
       get_url:
@@ -394,23 +311,6 @@
         dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
         mode: '0755'
       environment: "{{ palette_proxy_env }}"
-      when:
-        - palette_management_mode == 'central'
-        - palette_instance_type == 'saas'
-
-    - name: Download central management installer for private Palette
-      get_url:
-        url: >-
-          {{
-            'https://github.com/spectrocloud/agent-mode/releases/download/'
-            ~ palette_release_tag ~ '/' ~ palette_installer_script
-          }}
-        dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
-        mode: '0755'
-      environment: "{{ palette_proxy_env }}"
-      when:
-        - palette_management_mode == 'central'
-        - palette_instance_type == 'private'
 
     - name: Launch central management installer in the background
       shell: >-
@@ -424,60 +324,10 @@
           | combine({'USERDATA': palette_install_workdir ~ '/user-data'})
         }}
       changed_when: true
-      when: palette_management_mode == 'central'
-
-    - name: Wait for the host to disconnect during central management install
-      wait_for:
-        host: "{{ ansible_host | default(inventory_hostname) }}"
-        port: 22
-        state: stopped
-        delay: 15
-        timeout: "{{ palette_reboot_timeout }}"
-      delegate_to: localhost
-      become: false
-      when:
-        - palette_management_mode == 'central'
-        - palette_wait_for_reboot
-
-    - name: Wait for the host to return after central management install
-      wait_for_connection:
-        delay: 20
-        timeout: "{{ palette_reboot_timeout }}"
-        connect_timeout: 30
-      when:
-        - palette_management_mode == 'central'
-        - palette_wait_for_reboot
-
-    - name: Download local management airgap tarball
-      get_url:
-        url: >-
-          {{
-            'https://github.com/spectrocloud/agent-mode/releases/download/'
-            ~ palette_release_tag ~ '/' ~ palette_tarball_name
-          }}
-        dest: "{{ palette_local_tarball_dir }}/{{ palette_tarball_name }}"
-        mode: '0644'
-      environment: "{{ palette_proxy_env }}"
-      when: palette_management_mode == 'local'
-
-    - name: Extract local management airgap tarball to root
-      unarchive:
-        src: "{{ palette_local_tarball_dir }}/{{ palette_tarball_name }}"
-        dest: /
-        remote_src: true
-      when: palette_management_mode == 'local'
-
-    - name: Reboot into local management installer flow
-      reboot:
-        reboot_timeout: "{{ palette_reboot_timeout }}"
-        connect_timeout: 30
-        post_reboot_delay: 15
-      when: palette_management_mode == 'local'
 
     - name: Summarize next validation step
       debug:
         msg: >-
-          Host preparation is complete. Validate registration in Palette
-          for central mode,
-          or use Local UI for local mode.
-          Follow the SpectroCloud post-install workflow.
+          Host preparation is complete. Validate edge host registration
+          and health in Palette. Follow the SpectroCloud post-install
+          workflow.
