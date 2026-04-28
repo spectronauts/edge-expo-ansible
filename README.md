@@ -24,6 +24,8 @@ Use this checklist for a first run.
 ./bootstrap/install-ansible.sh
 ```
 
+On Linux, this bootstrap step also writes `/etc/sudoers.d/<current-user>` with a `NOPASSWD` sudo rule for the invoking non-root user.
+
 2. Set secrets in group_vars/secrets.yml.
 
 ```yaml
@@ -108,6 +110,8 @@ Install Ansible:
 ```bash
 ./bootstrap/install-ansible.sh
 ```
+
+On Linux, the bootstrap script also creates `/etc/sudoers.d/<current-user>` with a `NOPASSWD` sudo rule for the invoking non-root user.
 
 ## 3) Required files to edit
 
