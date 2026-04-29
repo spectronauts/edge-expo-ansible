@@ -352,7 +352,7 @@
         - palette_is_local_connection
 
     - name: Ensure required Palette units are enabled
-      systemd_service:
+      ansible.builtin.systemd:
         name: "{{ item }}"
         enabled: true
       loop:
@@ -365,13 +365,13 @@
         - spectro-palette-agent-reconcile.timer
 
     - name: Ensure reconcile timer is active
-      systemd_service:
+      ansible.builtin.systemd:
         name: spectro-palette-agent-reconcile.timer
         enabled: true
         state: started
 
     - name: Start initial Palette registration services
-      systemd_service:
+      ansible.builtin.systemd:
         name: "{{ item }}"
         state: started
       loop:

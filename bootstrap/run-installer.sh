@@ -139,6 +139,18 @@ require_integer() {
   fi
 }
 
+require_trimmed_value() {
+  local value="$1"
+  local label="$2"
+  local trimmed_value=""
+
+  trimmed_value="$(trim_whitespace "$value")"
+  if [ "$value" != "$trimmed_value" ]; then
+    print_error "$label contains leading or trailing whitespace."
+    exit 1
+  fi
+}
+
 normalize_endpoint_host() {
   local endpoint="$1"
   endpoint="${endpoint#http://}"
@@ -193,6 +205,11 @@ EOF
 ---
 palette_registration_token: "$(yaml_escape "$registration_token")"
 EOF
+
+  if ! grep -Fqx "palette_registration_token: \"$(yaml_escape "$registration_token")\"" "$SECRETS_FILE"; then
+    print_error "Failed to write registration token exactly as provided."
+    exit 1
+  fi
 }
 
 run_playbook_flow() {
@@ -226,6 +243,8 @@ reboot_after_install="$(prompt_yes_no "Reboot host after install" "yes")"
 reboot_timeout="$(prompt_with_default "Reboot timeout in seconds" "1800")"
 
 require_integer "$reboot_timeout" "Reboot timeout"
+require_trimmed_value "$registration_token" "Palette registration token"
+require_trimmed_value "$project_name" "Palette project name"
 
 endpoint_host="$(normalize_endpoint_host "$endpoint_input")"
 if [ -z "$endpoint_host" ]; then
