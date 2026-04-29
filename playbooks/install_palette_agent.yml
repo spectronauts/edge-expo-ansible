@@ -92,7 +92,10 @@
 
     - name: Determine if target uses local connection
       set_fact:
-        palette_is_local_connection: "{{ (ansible_connection | default('ssh')) == 'local' }}"
+        palette_is_local_connection: >-
+          {{
+            (ansible_connection | default('ssh')) == 'local'
+          }}
 
     - name: Normalize Palette endpoint and architecture values
       set_fact:
