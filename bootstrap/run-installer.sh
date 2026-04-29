@@ -235,21 +235,21 @@ echo "- Run syntax check"
 echo "- Execute the install playbook"
 
 registration_token="$(prompt_required "Palette registration token")"
-registration_token_no_ws="$(printf '%s' \"$registration_token\" | \
+registration_token_no_ws="$(printf '%s' "$registration_token" | \
   tr -d '[:space:]')"
 if [ "$registration_token" != "$registration_token_no_ws" ]; then
   print_warn "Whitespace was removed from the registration token input."
 fi
 registration_token="$registration_token_no_ws"
 project_name="$(prompt_required "Palette project name")"
-endpoint_input="$(prompt_with_default \"Palette endpoint host\" \
-  \"api.spectrocloud.com\")"
+endpoint_input="$(prompt_with_default "Palette endpoint host" \
+  "api.spectrocloud.com")"
 use_fips="$(prompt_yes_no "Use FIPS installer" "no")"
 vip_skip="$(prompt_yes_no "Skip VIP configuration" "no")"
 http_proxy="$(prompt_with_default "HTTP proxy (optional)" "")"
 https_proxy="$(prompt_with_default "HTTPS proxy (optional)" "$http_proxy")"
-install_workdir="$(prompt_with_default \"Installer work directory\" \
-  \"/opt/palette-agent\")"
+install_workdir="$(prompt_with_default "Installer work directory" \
+  "/opt/palette-agent")"
 reboot_after_install="$(prompt_yes_no "Reboot host after install" "yes")"
 reboot_timeout="$(prompt_with_default "Reboot timeout in seconds" "1800")"
 
@@ -300,7 +300,7 @@ run_playbook_flow
 
 if grep -q "ansible_connection: local" "$INVENTORY_FILE"; then
   echo
-  print_warn "Inventory uses local connection; reboot may require" \
+  print_warn "Inventory uses local connection; reboot may require " \
     "manual action depending on host policy."
 fi
 
