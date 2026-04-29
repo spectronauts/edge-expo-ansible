@@ -79,7 +79,9 @@
         that:
           - palette_management_mode == 'central'
           - palette_registration_token | default('') | length > 0
+          - palette_registration_token == (palette_registration_token | trim)
           - palette_project_name | default('') | length > 0
+          - palette_project_name == (palette_project_name | trim)
         fail_msg: Review group_vars and secrets before running the SaaS central agent mode playbook.
 
     - name: Determine if target uses local connection

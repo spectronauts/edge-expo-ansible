@@ -45,12 +45,20 @@ yaml_escape() {
   printf '%s' "$value"
 }
 
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
 prompt_required() {
   local prompt="$1"
   local value=""
   while true; do
     prompt_label "$prompt"
     read -r -p "> " value
+    value="$(trim_whitespace "$value")"
     if [ -n "$value" ]; then
       printf '%s' "$value"
       return 0
@@ -66,6 +74,7 @@ prompt_required_secret() {
     prompt_label "$prompt"
     read -r -s -p "> " value
     echo
+    value="$(trim_whitespace "$value")"
     if [ -n "$value" ]; then
       printf '%s' "$value"
       return 0
@@ -80,6 +89,7 @@ prompt_with_default() {
   local value=""
   prompt_label "$prompt"
   read -r -p "> [$default_value] " value
+  value="$(trim_whitespace "$value")"
   if [ -z "$value" ]; then
     value="$default_value"
   fi
@@ -97,6 +107,7 @@ prompt_yes_no() {
   while true; do
     prompt_label "$prompt"
     read -r -p "> [$normalized_default] " value
+    value="$(trim_whitespace "$value")"
     value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
 
     if [ -z "$value" ]; then
