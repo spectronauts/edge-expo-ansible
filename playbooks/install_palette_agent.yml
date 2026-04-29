@@ -386,6 +386,12 @@
         - spectro-palette-agent-bootstrap.service
         - spectro-palette-agent-reconcile.service
 
+    - name: Disable Palette TUI service
+      ansible.builtin.systemd:
+        name: spectro-palette-tui.service
+        enabled: false
+        state: stopped
+
     - name: Collect Palette agent service logs
       command: >-
         journalctl
