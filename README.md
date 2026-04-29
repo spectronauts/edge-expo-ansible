@@ -13,6 +13,23 @@ This repository is intentionally constrained:
 
 ## Quick Start
 
+### Guided Installer (Recommended)
+
+Run the guided installer to collect values, write vars files, bootstrap Ansible, and execute the playbook:
+
+```bash
+./bootstrap/run-installer.sh
+```
+
+The script updates:
+
+- `group_vars/all.yml`
+- `group_vars/secrets.yml`
+
+Timestamped backups of both files are created before overwrite.
+
+### Manual Flow
+
 1. Install Ansible on the target host.
 
 ```bash
