@@ -52,6 +52,18 @@ trim_whitespace() {
   printf '%s' "$value"
 }
 
+mask_secret_preview() {
+  local value="$1"
+  local length="${#value}"
+
+  if [ "$length" -le 8 ]; then
+    printf '%s' "$value"
+    return 0
+  fi
+
+  printf '%s...%s (%s chars)' "${value:0:4}" "${value: -4}" "$length"
+}
+
 prompt_required() {
   local prompt="$1"
   local value=""
@@ -262,7 +274,7 @@ echo "https_proxy: ${https_proxy:-<empty>}"
 echo "install_workdir: $install_workdir"
 echo "reboot_after_install: $reboot_after_install"
 echo "reboot_timeout: $reboot_timeout"
-echo "token: <hidden>"
+echo "token_preview: $(mask_secret_preview "$registration_token")"
 
 confirm="$(prompt_yes_no "Proceed with these values" "yes")"
 if [ "$confirm" != "true" ]; then
