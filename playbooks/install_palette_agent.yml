@@ -81,6 +81,10 @@
           - palette_registration_token | default('') | length > 0
         fail_msg: Review group_vars and secrets before running the SaaS central agent mode playbook.
 
+    - name: Determine if target uses local connection
+      set_fact:
+        palette_is_local_connection: "{{ (ansible_connection | default('ssh')) == 'local' }}"
+
     - name: Normalize Palette endpoint and architecture values
       set_fact:
         palette_endpoint_host: >-
@@ -331,7 +335,18 @@
         reboot_timeout: "{{ palette_reboot_timeout }}"
         connect_timeout: 30
         post_reboot_delay: 20
-      when: palette_reboot_after_install
+      when:
+        - palette_reboot_after_install
+        - not palette_is_local_connection
+
+    - name: Skip automatic reboot when running with local connection
+      debug:
+        msg: >-
+          Skipping automatic reboot because Ansible is using a local connection.
+          Reboot manually after this run to execute boot-time registration stages.
+      when:
+        - palette_reboot_after_install
+        - palette_is_local_connection
 
     - name: Verify required Palette units are enabled
       command: systemctl is-enabled {{ item }}

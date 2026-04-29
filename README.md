@@ -69,6 +69,7 @@ Important:
 - Run only on intended edge hosts.
 - This repository does not contain local-management appliance extraction logic.
 - SpectroCloud agent mode registration flow expects a reboot after install.
+- When Ansible runs with `ansible_connection: local`, automatic reboot is skipped for safety; reboot the host manually after the run.
 
 ## Repository Layout
 
