@@ -231,7 +231,7 @@ echo "- Bootstrap Ansible"
 echo "- Run syntax check"
 echo "- Execute the install playbook"
 
-registration_token="$(prompt_required_secret "Palette registration token")"
+registration_token="$(prompt_required "Palette registration token")"
 project_name="$(prompt_required "Palette project name")"
 endpoint_input="$(prompt_with_default "Palette endpoint host" "api.spectrocloud.com")"
 use_fips="$(prompt_yes_no "Use FIPS installer" "no")"
