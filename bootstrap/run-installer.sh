@@ -34,8 +34,8 @@ print_error() {
 }
 
 prompt_label() {
-  echo
-  printf '%b%s%b\n' "$color_blue" "$1" "$color_reset"
+  echo >&2
+  printf '%b%s%b\n' "$color_blue" "$1" "$color_reset" >&2
 }
 
 yaml_escape() {
