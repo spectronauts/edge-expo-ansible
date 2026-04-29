@@ -57,7 +57,7 @@ prompt_required() {
   local value=""
   while true; do
     prompt_label "$prompt"
-    read -r -p "> " value
+    read -r -p ">" value
     value="$(trim_whitespace "$value")"
     if [ -n "$value" ]; then
       printf '%s' "$value"
@@ -72,7 +72,7 @@ prompt_required_secret() {
   local value=""
   while true; do
     prompt_label "$prompt"
-    read -r -s -p "> " value
+    read -r -s -p ">" value
     echo
     value="$(trim_whitespace "$value")"
     if [ -n "$value" ]; then
@@ -88,7 +88,7 @@ prompt_with_default() {
   local default_value="$2"
   local value=""
   prompt_label "$prompt"
-  read -r -p "> [$default_value] " value
+  read -r -p ">[$default_value] " value
   value="$(trim_whitespace "$value")"
   if [ -z "$value" ]; then
     value="$default_value"
@@ -106,7 +106,7 @@ prompt_yes_no() {
 
   while true; do
     prompt_label "$prompt"
-    read -r -p "> [$normalized_default] " value
+    read -r -p ">[$normalized_default] " value
     value="$(trim_whitespace "$value")"
     value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
 
@@ -232,6 +232,11 @@ echo "- Run syntax check"
 echo "- Execute the install playbook"
 
 registration_token="$(prompt_required "Palette registration token")"
+registration_token_no_ws="$(printf '%s' "$registration_token" | tr -d '[:space:]')"
+if [ "$registration_token" != "$registration_token_no_ws" ]; then
+  print_warn "Whitespace was removed from the registration token input."
+fi
+registration_token="$registration_token_no_ws"
 project_name="$(prompt_required "Palette project name")"
 endpoint_input="$(prompt_with_default "Palette endpoint host" "api.spectrocloud.com")"
 use_fips="$(prompt_yes_no "Use FIPS installer" "no")"
