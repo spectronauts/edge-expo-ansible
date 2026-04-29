@@ -1,6 +1,7 @@
 #cloud-config
 
 stylus:
+  disableTui: true
   vip:
     skip: {{ 'true' if palette_vip_skip else 'false' }}
   site:

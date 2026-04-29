@@ -79,10 +79,16 @@
         that:
           - palette_management_mode == 'central'
           - palette_registration_token | default('') | length > 0
-          - palette_registration_token == (palette_registration_token | trim)
+          - >-
+            palette_registration_token ==
+            (palette_registration_token | trim)
           - palette_project_name | default('') | length > 0
-          - palette_project_name == (palette_project_name | trim)
-        fail_msg: Review group_vars and secrets before running the SaaS central agent mode playbook.
+          - >-
+            palette_project_name ==
+            (palette_project_name | trim)
+        fail_msg: >
+          Review group_vars and secrets before running the
+          SaaS central agent mode playbook.
 
     - name: Determine if target uses local connection
       set_fact:
@@ -345,8 +351,9 @@
     - name: Skip automatic reboot when running with local connection
       debug:
         msg: >-
-          Skipping automatic reboot because Ansible is using a local connection.
-          Reboot manually after this run to execute boot-time registration stages.
+          Skipping automatic reboot because Ansible is using
+          a local connection. Reboot manually after this run
+          to execute boot-time registration stages.
       when:
         - palette_reboot_after_install
         - palette_is_local_connection
