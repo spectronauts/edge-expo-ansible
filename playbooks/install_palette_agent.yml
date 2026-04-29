@@ -312,10 +312,11 @@
         mode: '0755'
       environment: "{{ palette_proxy_env }}"
 
-    - name: Launch central management installer in the background
+    - name: Run central management installer
       shell: >-
-        nohup {{ palette_install_workdir }}/{{ palette_installer_script }}
-        >/var/log/palette-agent-install.log 2>&1 &
+        set -o pipefail;
+        {{ palette_install_workdir }}/{{ palette_installer_script }}
+        2>&1 | tee /var/log/palette-agent-install.log
       args:
         executable: /bin/bash
       environment: >-
@@ -325,9 +326,63 @@
         }}
       changed_when: true
 
+    - name: Reboot host after agent install
+      reboot:
+        reboot_timeout: "{{ palette_reboot_timeout }}"
+        connect_timeout: 30
+        post_reboot_delay: 20
+      when: palette_reboot_after_install
+
+    - name: Verify required Palette units are enabled
+      command: systemctl is-enabled {{ item }}
+      register: palette_unit_enabled
+      changed_when: false
+      failed_when: palette_unit_enabled.stdout.strip() != 'enabled'
+      loop:
+        - spectro-palette-agent-start.service
+        - spectro-palette-agent-initramfs.service
+        - spectro-palette-agent-boot.service
+        - spectro-palette-agent-network.service
+        - spectro-palette-agent-bootstrap.service
+        - spectro-palette-agent-reconcile.service
+        - spectro-palette-agent-reconcile.timer
+
+    - name: Wait for reconcile timer to become active
+      command: systemctl is-active spectro-palette-agent-reconcile.timer
+      register: palette_reconcile_timer_state
+      changed_when: false
+      retries: 18
+      delay: 10
+      until: palette_reconcile_timer_state.stdout.strip() == 'active'
+
+    - name: Start initial Palette registration services
+      command: systemctl start {{ item }}
+      loop:
+        - spectro-palette-agent-network.service
+        - spectro-palette-agent-bootstrap.service
+        - spectro-palette-agent-reconcile.service
+
+    - name: Collect Palette agent service logs
+      command: >-
+        journalctl
+        -u spectro-palette-agent-network.service
+        -u spectro-palette-agent-bootstrap.service
+        -u spectro-palette-agent-reconcile.service
+        -n 200
+        --no-pager
+      register: palette_agent_service_logs
+      changed_when: false
+
+    - name: Validate Palette agent services produced logs
+      assert:
+        that:
+          - "'-- No entries --' not in palette_agent_service_logs.stdout"
+        fail_msg: >-
+          Palette agent services did not produce logs after install.
+          Check /var/log/palette-agent-install.log and systemd state.
+
     - name: Summarize next validation step
       debug:
         msg: >-
-          Host preparation is complete. Validate edge host registration
-          and health in Palette. Follow the SpectroCloud post-install
-          workflow.
+          Host preparation is complete and post-install checks passed.
+          Validate edge host registration and health in Palette.

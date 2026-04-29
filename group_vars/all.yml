@@ -9,6 +9,8 @@ palette_vip_skip: false
 palette_http_proxy: ""
 palette_https_proxy: ""
 palette_install_workdir: /opt/palette-agent
+palette_reboot_after_install: true
+palette_reboot_timeout: 1800
 
 palette_external_registries: []
 palette_registry_mapping_rules: {}

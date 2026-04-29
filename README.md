@@ -35,6 +35,7 @@ palette_registration_token: "<your-registration-token>"
 palette_management_mode: central
 palette_endpoint: api.spectrocloud.com
 palette_use_fips: false
+palette_reboot_after_install: true
 ```
 
 4. Run a syntax check.
@@ -58,13 +59,16 @@ The playbook runs against the local host by default and does the following:
 3. Renders central registration user-data to `{{ palette_install_workdir }}/user-data`.
 4. Downloads the latest SaaS central agent installer script from SpectroCloud agent-mode releases.
 5. Runs the installer with `USERDATA` pointing to the rendered registration config.
-6. Applies optional Rocky + FIPS host preparation when enabled.
+6. Reboots the host (default) so registration stages can execute.
+7. Verifies Palette units are enabled, reconcile timer is active, and service logs are present.
+8. Applies optional Rocky + FIPS host preparation when enabled.
 
 Important:
 
 - This modifies system packages/files.
 - Run only on intended edge hosts.
 - This repository does not contain local-management appliance extraction logic.
+- SpectroCloud agent mode registration flow expects a reboot after install.
 
 ## Repository Layout
 
@@ -89,6 +93,8 @@ In `group_vars/all.yml`:
 - `palette_management_mode`: fixed to `central`
 - `palette_endpoint`: Palette SaaS endpoint host
 - `palette_use_fips`: enable FIPS installer variant and Rocky FIPS helper tasks
+- `palette_reboot_after_install`: reboots host after install so registration stages can run (recommended `true`)
+- `palette_reboot_timeout`: max seconds Ansible waits for reboot completion
 - `palette_http_proxy` / `palette_https_proxy`: optional proxy env injection
 - `palette_external_registries`: optional registry credentials injected into user-data
 - `palette_registry_mapping_rules`: optional registry mapping rules injected into user-data
