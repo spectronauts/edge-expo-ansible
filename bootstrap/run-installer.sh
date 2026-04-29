@@ -33,6 +33,11 @@ print_error() {
   printf '%b%s%b\n' "$color_red" "$1" "$color_reset" >&2
 }
 
+prompt_label() {
+  echo
+  printf '%b%s%b\n' "$color_blue" "$1" "$color_reset"
+}
+
 yaml_escape() {
   local value="$1"
   value="${value//\\/\\\\}"
@@ -44,7 +49,8 @@ prompt_required() {
   local prompt="$1"
   local value=""
   while true; do
-    read -r -p "$prompt: " value
+    prompt_label "$prompt"
+    read -r -p "> " value
     if [ -n "$value" ]; then
       printf '%s' "$value"
       return 0
@@ -57,7 +63,8 @@ prompt_required_secret() {
   local prompt="$1"
   local value=""
   while true; do
-    read -r -s -p "$prompt: " value
+    prompt_label "$prompt"
+    read -r -s -p "> " value
     echo
     if [ -n "$value" ]; then
       printf '%s' "$value"
@@ -71,7 +78,8 @@ prompt_with_default() {
   local prompt="$1"
   local default_value="$2"
   local value=""
-  read -r -p "$prompt [$default_value]: " value
+  prompt_label "$prompt"
+  read -r -p "> [$default_value] " value
   if [ -z "$value" ]; then
     value="$default_value"
   fi
@@ -87,7 +95,8 @@ prompt_yes_no() {
   normalized_default="$(printf '%s' "$default_value" | tr '[:upper:]' '[:lower:]')"
 
   while true; do
-    read -r -p "$prompt [$normalized_default]: " value
+    prompt_label "$prompt"
+    read -r -p "> [$normalized_default] " value
     value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
 
     if [ -z "$value" ]; then
