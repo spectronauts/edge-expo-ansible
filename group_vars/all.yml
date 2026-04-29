@@ -2,7 +2,7 @@
 # This repository only supports Palette SaaS central agent mode installs.
 palette_management_mode: central
 palette_endpoint: api.spectrocloud.com
-palette_project_name: Default
+palette_project_name: ""
 palette_use_fips: false
 palette_vip_skip: false
 

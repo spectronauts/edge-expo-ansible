@@ -34,6 +34,7 @@ palette_registration_token: "<your-registration-token>"
 ---
 palette_management_mode: central
 palette_endpoint: api.spectrocloud.com
+palette_project_name: "my-edge-project"
 palette_use_fips: false
 palette_reboot_after_install: true
 ```
@@ -93,6 +94,7 @@ In `group_vars/all.yml`:
 
 - `palette_management_mode`: fixed to `central`
 - `palette_endpoint`: Palette SaaS endpoint host
+- `palette_project_name`: required Palette project name used for registration target
 - `palette_use_fips`: enable FIPS installer variant and Rocky FIPS helper tasks
 - `palette_reboot_after_install`: reboots host after install so registration stages can run (recommended `true`)
 - `palette_reboot_timeout`: max seconds Ansible waits for reboot completion
