@@ -196,15 +196,36 @@ edge-expo-ansible/
     └── templates/user-data-central.yml.j2          # rendered to user-data
 ```
 
-## Lint
+## Lint and Test
 
 ```bash
-ansible-lint playbooks/install_palette_agent.yml
-yamllint playbooks/install_palette_agent.yml group_vars/ inventory/
+ansible-lint
+yamllint .ansible-lint .github/workflows/ group_vars/ inventory/ playbooks/ tests/
 shellcheck bootstrap/install-ansible.sh bootstrap/uninstall-ansible.sh
+ansible-playbook --syntax-check -i inventory/hosts.yml playbooks/install_palette_agent.yml
+ansible-playbook tests/render-templates.yml
 ```
 
-CI runs all three on every push and pull request to `main`.
+CI runs all five on every push and pull request to `main`. The render test exercises `playbooks/templates/user-data-central.yml.j2` with two scenarios (minimal + full) and asserts the output parses as YAML with the expected structure — useful for catching template regressions without an edge host.
+
+## Releases
+
+Releases are created automatically. Whenever the **Lint** workflow succeeds on a push to `main`, the **Auto Release** workflow:
+
+1. Reads the latest `MAJOR.MINOR.PATCH` tag (`1.0.0` is the seed).
+2. Bumps the version based on the commit message of the head commit.
+3. Creates an annotated tag, pushes it, and publishes a GitHub release with auto-generated notes (PR titles + commits since the previous release).
+
+| Commit message contains | Bump | Example: from 1.0.5 |
+|---|---|---|
+| *(default — no marker)* | patch | `1.0.6` |
+| `[minor]` | minor, patch reset | `1.1.0` |
+| `[major]` or `BREAKING CHANGE:` | major, minor + patch reset | `2.0.0` |
+| `[skip release]` or `[no release]` | none — no tag, no release | — |
+
+Markers are case-insensitive and can appear anywhere in the commit message subject or body.
+
+Manual releases are still available via the **Release** workflow's `workflow_dispatch` (enter an existing tag name).
 
 ## Safety Notes
 

@@ -1,0 +1,103 @@
+name: Auto Release
+
+on:
+  workflow_run:
+    workflows: ["Lint"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Only auto-release when:
+    # - the upstream Lint run was a push to main (not a PR)
+    # - the upstream Lint run succeeded
+    if: >-
+      ${{
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.conclusion == 'success'
+      }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the commit that passed lint
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Determine next version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest=$(git tag --sort=-v:refname \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | head -1 || true)
+          if [ -z "${latest}" ]; then
+            latest="0.0.0"
+          fi
+
+          IFS='.' read -r major minor patch <<<"${latest}"
+
+          sha="${{ github.event.workflow_run.head_sha }}"
+          msg=$(git log -1 --format=%B "${sha}")
+
+          if grep -qiE '\[skip release\]|\[no release\]' <<<"${msg}"; then
+            echo "Skip-release marker found; not releasing this commit."
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if grep -qiE '\[major\]|^BREAKING CHANGE:' <<<"${msg}"; then
+            major=$((major + 1)); minor=0; patch=0
+            bump="major"
+          elif grep -qiE '\[minor\]' <<<"${msg}"; then
+            minor=$((minor + 1)); patch=0
+            bump="minor"
+          else
+            patch=$((patch + 1))
+            bump="patch"
+          fi
+
+          new="${major}.${minor}.${patch}"
+          echo "Bumping ${latest} -> ${new} (${bump})"
+
+          # Refuse to overwrite an existing tag (e.g. someone already
+          # tagged this version manually).
+          if git rev-parse "${new}" >/dev/null 2>&1; then
+            echo "Tag ${new} already exists; aborting auto-release."
+            exit 1
+          fi
+
+          {
+            echo "tag=${new}"
+            echo "previous=${latest}"
+            echo "bump=${bump}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Configure git identity
+        if: ${{ steps.version.outputs.skip != 'true' }}
+        run: |
+          bot_email="41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "${bot_email}"
+
+      - name: Create and push tag
+        if: ${{ steps.version.outputs.skip != 'true' }}
+        run: |
+          git tag -a "${{ steps.version.outputs.tag }}" \
+            -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub release
+        if: ${{ steps.version.outputs.skip != 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
