@@ -1,0 +1,102 @@
+name: Bug report
+description: Something in this Ansible automation did not behave as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for problems with this repo's playbook, templates, or
+        bootstrap scripts. Product questions about Palette / Stylus
+        belong with Spectro support.
+  - type: input
+    id: branch_or_commit
+    attributes:
+      label: Repo branch or commit
+      description: Output of `git rev-parse --short HEAD` or the tag you ran.
+      placeholder: e.g. main @ ef799b4
+    validations:
+      required: true
+  - type: dropdown
+    id: target_os
+    attributes:
+      label: Target host OS
+      options:
+        - Ubuntu (Debian-family)
+        - Rocky Linux
+        - RHEL
+        - AlmaLinux
+        - Other (mention in details)
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Ansible connection mode
+      options:
+        - local (running on the edge host itself)
+        - ssh (running from a separate controller)
+    validations:
+      required: true
+  - type: dropdown
+    id: fips
+    attributes:
+      label: FIPS mode (palette_use_fips)
+      options:
+        - "false"
+        - "true"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: >-
+        Include the failing task name (Ansible's TASK [...] header) and
+        the relevant Ansible output. Trim secrets if any leak in.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Edit group_vars/all.yml and set ...
+        2. ansible-playbook -i inventory/hosts.yml \
+             playbooks/install_palette_agent.yml
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: install_log
+    attributes:
+      label: Install log tail
+      description: >-
+        Relevant tail of /var/log/palette-agent-install.log on the
+        target host. Skip if the failure happened before the installer
+        ran.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: journal
+    attributes:
+      label: journalctl tail for spectro-palette-agent-* services
+      description: >-
+        Skip if the failure happened before the agent services were
+        installed.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else?
+      description: Workarounds tried, hypotheses, related issues.
+    validations:
+      required: false

@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a change or addition to this Ansible automation.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please confirm the request is in scope for this repo:
+
+        - Central agent mode only (no local-management appliance flow)
+        - Palette SaaS endpoint only (no private API key flow)
+        - Debian-family or RedHat-family edge hosts
+
+        Out-of-scope requests are unlikely to land — open them in a
+        different repo or with Spectro support instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: >-
+        Describe the situation or pain point. "I want X" without
+        context is hard to evaluate; describe the underlying need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: >-
+        What would the playbook, variables, or templates do
+        differently? New variable? New task? Behavior change to an
+        existing task?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: >-
+        Other approaches you thought about and why you rejected them.
+    validations:
+      required: false
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Links to docs, related issues, screenshots if relevant.
+    validations:
+      required: false

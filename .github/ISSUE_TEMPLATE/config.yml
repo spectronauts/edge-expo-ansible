@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Palette product question
+    url: https://docs.spectrocloud.com
+    about: >-
+      Questions about Palette behavior, edge mode, Stylus, or the
+      installer script itself belong with Spectro support, not with
+      this Ansible automation repo.

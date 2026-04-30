@@ -44,19 +44,23 @@ jobs:
 
           IFS='.' read -r major minor patch <<<"${latest}"
 
+          # Match markers ONLY in the subject line so that documenting
+          # them in the commit body does not accidentally trigger a bump
+          # or skip.
           sha="${{ github.event.workflow_run.head_sha }}"
-          msg=$(git log -1 --format=%B "${sha}")
+          subject=$(git log -1 --format=%s "${sha}")
+          echo "Subject: ${subject}"
 
-          if grep -qiE '\[skip release\]|\[no release\]' <<<"${msg}"; then
-            echo "Skip-release marker found; not releasing this commit."
+          if grep -qiE '\[skip release\]|\[no release\]' <<<"${subject}"; then
+            echo "Skip-release marker found in subject; not releasing."
             echo "skip=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          if grep -qiE '\[major\]|^BREAKING CHANGE:' <<<"${msg}"; then
+          if grep -qiE '\[major\]' <<<"${subject}"; then
             major=$((major + 1)); minor=0; patch=0
             bump="major"
-          elif grep -qiE '\[minor\]' <<<"${msg}"; then
+          elif grep -qiE '\[minor\]' <<<"${subject}"; then
             minor=$((minor + 1)); patch=0
             bump="minor"
           else

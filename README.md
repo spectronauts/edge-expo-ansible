@@ -216,14 +216,14 @@ Releases are created automatically. Whenever the **Lint** workflow succeeds on a
 2. Bumps the version based on the commit message of the head commit.
 3. Creates an annotated tag, pushes it, and publishes a GitHub release with auto-generated notes (PR titles + commits since the previous release).
 
-| Commit message contains | Bump | Example: from 1.0.5 |
+| Commit subject contains | Bump | Example: from 1.0.5 |
 |---|---|---|
 | *(default — no marker)* | patch | `1.0.6` |
 | `[minor]` | minor, patch reset | `1.1.0` |
-| `[major]` or `BREAKING CHANGE:` | major, minor + patch reset | `2.0.0` |
+| `[major]` | major, minor + patch reset | `2.0.0` |
 | `[skip release]` or `[no release]` | none — no tag, no release | — |
 
-Markers are case-insensitive and can appear anywhere in the commit message subject or body.
+Markers are case-insensitive but **must appear in the commit subject (first line)**, not the body. This way, documenting markers in a commit body or PR description never triggers them accidentally.
 
 Manual releases are still available via the **Release** workflow's `workflow_dispatch` (enter an existing tag name).
 

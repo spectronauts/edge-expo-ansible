@@ -44,7 +44,7 @@ jobs:
         run: |
           yamllint \
             .ansible-lint \
-            .github/workflows/ \
+            .github/ \
             group_vars/ \
             inventory/ \
             playbooks/ \
