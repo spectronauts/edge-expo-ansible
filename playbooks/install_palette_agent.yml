@@ -111,6 +111,33 @@
           or trailing spaces).
       tags: [always]
 
+    - name: Validate Palette endpoint
+      assert:
+        that:
+          - palette_endpoint | default('') | length > 0
+          - >-
+            palette_endpoint ==
+            (palette_endpoint | trim)
+        fail_msg: >-
+          palette_endpoint is missing or has surrounding
+          whitespace. Set it in group_vars/all.yml
+          (e.g. api.spectrocloud.com).
+      tags: [always]
+
+    - name: Validate installer checksum format when set
+      assert:
+        that:
+          - palette_installer_checksum | regex_search(
+              '^(sha1|sha224|sha256|sha384|sha512|md5):[0-9a-fA-F]+$'
+            )
+        fail_msg: >-
+          palette_installer_checksum must look like
+          '<algo>:<hex>' where algo is one of
+          sha1/sha224/sha256/sha384/sha512/md5
+          (got '{{ palette_installer_checksum }}').
+      when: palette_installer_checksum | default('') | length > 0
+      tags: [always]
+
     - name: Determine if target uses local connection
       set_fact:
         palette_is_local_connection: >-

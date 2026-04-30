@@ -1,0 +1,118 @@
+---
+# Renders user-data-central.yml.j2 with two variable scenarios and asserts the
+# output parses as YAML. Catches Jinja errors and indent() / to_nice_yaml bugs
+# in the cloud-config template without needing a real edge host.
+#
+# Run locally:
+#   ansible-playbook tests/render-templates.yml
+- name: Render user-data template (minimal vars)
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    palette_endpoint_host: api.spectrocloud.com
+    palette_registration_token: test-token-minimal
+    palette_project_name: ci-min
+    palette_vip_skip: false
+    palette_disable_tui: true
+    palette_external_registries: []
+    palette_registry_mapping_rules: {}
+    palette_site_extra: {}
+    palette_stylus_extra: {}
+  tasks:
+    - name: Render minimal user-data
+      template:
+        src: ../playbooks/templates/user-data-central.yml.j2
+        dest: /tmp/user-data-minimal.yml
+        mode: '0600'
+
+    - name: Read rendered minimal user-data
+      slurp:
+        src: /tmp/user-data-minimal.yml
+      register: minimal_rendered
+
+    - name: Assert minimal user-data parses as YAML and has expected fields
+      assert:
+        that:
+          - rendered is mapping
+          - rendered.stylus.disableTui is true
+          - rendered.stylus.vip.skip is false
+          - >-
+            rendered.stylus.site.edgeHostToken
+            == 'test-token-minimal'
+          - >-
+            rendered.stylus.site.paletteEndpoint
+            == 'api.spectrocloud.com'
+          - rendered.stylus.site.projectName == 'ci-min'
+          - rendered.stylus.externalRegistries is not defined
+        fail_msg: >-
+          Minimal render produced unexpected structure.
+      vars:
+        rendered: >-
+          {{ minimal_rendered.content | b64decode | from_yaml }}
+
+- name: Render user-data template (full vars)
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    palette_endpoint_host: tenant.example.com
+    palette_registration_token: test-token-full
+    palette_project_name: ci-full
+    palette_vip_skip: true
+    palette_disable_tui: false
+    palette_external_registries:
+      - name: my-registry
+        endpoint: registry.example.com
+        username: user
+        password: pass
+    palette_registry_mapping_rules:
+      docker.io: registry.example.com/docker
+      quay.io: registry.example.com/quay
+    palette_site_extra:
+      customField: someValue
+      nested:
+        key: value
+        list:
+          - one
+          - two
+    palette_stylus_extra:
+      additionalSetting: foo
+      featureGate:
+        someFlag: true
+  tasks:
+    - name: Render full user-data
+      template:
+        src: ../playbooks/templates/user-data-central.yml.j2
+        dest: /tmp/user-data-full.yml
+        mode: '0600'
+
+    - name: Read rendered full user-data
+      slurp:
+        src: /tmp/user-data-full.yml
+      register: full_rendered
+
+    - name: Assert full user-data parses as YAML and merges optionals
+      assert:
+        that:
+          - rendered is mapping
+          - rendered.stylus.disableTui is false
+          - rendered.stylus.vip.skip is true
+          - rendered.stylus.site.customField == 'someValue'
+          - rendered.stylus.site.nested.key == 'value'
+          - rendered.stylus.site.nested.list == ['one', 'two']
+          - rendered.stylus.externalRegistries.registries | length == 1
+          - >-
+            rendered.stylus.externalRegistries.registries[0].name
+            == 'my-registry'
+          - >-
+            rendered.stylus.externalRegistries.registryMappingRules['docker.io']
+            == 'registry.example.com/docker'
+          - rendered.stylus.additionalSetting == 'foo'
+          - rendered.stylus.featureGate.someFlag is true
+        fail_msg: >-
+          Full render produced unexpected structure or did not merge
+          optional maps as expected.
+      vars:
+        rendered: >-
+          {{ full_rendered.content | b64decode | from_yaml }}

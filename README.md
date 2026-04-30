@@ -41,14 +41,19 @@ The repo uses bare module names (`apt`, `dnf`, `shell`, ...) for compatibility w
 
 The script installs `ansible-core` via the OS package manager (apt / dnf / yum / brew) or falls back to `pipx`. On Linux, when invoked by a non-root user, it also creates `/etc/sudoers.d/<your-user>` with a `NOPASSWD: ALL` rule so subsequent `become: true` tasks don't prompt.
 
-**2. Set your registration token** in `group_vars/secrets.yml`:
+**2. Create your secrets file from the example and set your token:**
+
+```bash
+cp group_vars/secrets.example.yml group_vars/secrets.yml
+$EDITOR group_vars/secrets.yml
+```
 
 ```yaml
 ---
 palette_registration_token: "<your-registration-token>"
 ```
 
-Get this token from the Palette UI: **Tenant Settings → Registration Token** (or **Project → Registration Token** depending on your tenant layout).
+`group_vars/secrets.yml` is gitignored so your token cannot accidentally be committed. Get the token from the Palette UI: **Tenant Settings → Registration Token** (or **Project → Registration Token** depending on your tenant layout).
 
 **3. Set your project and endpoint** in `group_vars/all.yml`:
 
@@ -91,6 +96,8 @@ The run takes a few minutes plus a reboot. After it returns, verify the host app
 ## Configuration Reference
 
 ### `group_vars/secrets.yml`
+
+Created by copying `group_vars/secrets.example.yml`. Gitignored.
 
 | Variable | Required | Description |
 |---|---|---|
@@ -161,15 +168,28 @@ journalctl -u spectro-palette-agent-bootstrap.service -n 200 --no-pager
 
 **Local connection skips reboot:** by design, to avoid rebooting your workstation. Reboot the edge host manually after the run for the boot-time registration stages to execute.
 
+## Uninstall
+
+To reverse `bootstrap/install-ansible.sh` (remove the `NOPASSWD` sudoers entry and uninstall ansible-core via the same package manager):
+
+```bash
+./bootstrap/uninstall-ansible.sh
+# or just one piece:
+./bootstrap/uninstall-ansible.sh --keep-ansible    # only drop the sudoers entry
+./bootstrap/uninstall-ansible.sh --keep-sudoers    # only uninstall ansible
+```
+
 ## Repository Layout
 
 ```
 edge-expo-ansible/
 ├── ansible.cfg                                     # inventory path, pipelining
-├── bootstrap/install-ansible.sh                    # installs ansible-core
+├── bootstrap/
+│   ├── install-ansible.sh                          # installs ansible-core
+│   └── uninstall-ansible.sh                        # reverses install-ansible.sh
 ├── group_vars/
 │   ├── all.yml                                     # non-secret config
-│   └── secrets.yml                                 # registration token
+│   └── secrets.example.yml                         # template for secrets.yml (gitignored)
 ├── inventory/hosts.yml                             # localhost inventory
 └── playbooks/
     ├── install_palette_agent.yml                   # main playbook
@@ -181,7 +201,7 @@ edge-expo-ansible/
 ```bash
 ansible-lint playbooks/install_palette_agent.yml
 yamllint playbooks/install_palette_agent.yml group_vars/ inventory/
-shellcheck bootstrap/install-ansible.sh
+shellcheck bootstrap/install-ansible.sh bootstrap/uninstall-ansible.sh
 ```
 
 CI runs all three on every push and pull request to `main`.

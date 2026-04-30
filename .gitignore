@@ -1,2 +1,6 @@
 *.retry
 artifacts/
+
+# Operator-supplied registration token. Copy secrets.example.yml to
+# secrets.yml and fill in your token before running the playbook.
+/group_vars/secrets.yml

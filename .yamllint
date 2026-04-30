@@ -1,0 +1,9 @@
+---
+extends: default
+rules:
+  # GitHub Actions workflows use a bare `on:` key which yamllint's default
+  # truthy rule flags. The values we actually write are still validated.
+  truthy:
+    check-keys: false
+  # We don't require explicit `---` document-start in every file.
+  document-start: disable
