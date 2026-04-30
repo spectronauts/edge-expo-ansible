@@ -6,8 +6,8 @@ body:
     attributes:
       value: |
         Use this for problems with this repo's playbook, templates, or
-        bootstrap scripts. Product questions about Palette / Stylus
-        belong with Spectro support.
+        bootstrap scripts. Include enough context (branch/commit,
+        target OS, what you ran) that someone else can reproduce.
   - type: input
     id: branch_or_commit
     attributes:
@@ -40,7 +40,7 @@ body:
   - type: dropdown
     id: fips
     attributes:
-      label: FIPS mode (palette_use_fips)
+      label: FIPS mode
       options:
         - "false"
         - "true"
@@ -67,8 +67,7 @@ body:
       label: Steps to reproduce
       placeholder: |
         1. Edit group_vars/all.yml and set ...
-        2. ansible-playbook -i inventory/hosts.yml \
-             playbooks/install_palette_agent.yml
+        2. Run the playbook with `ansible-playbook -i inventory/hosts.yml ...`
         3. ...
     validations:
       required: true
@@ -77,18 +76,17 @@ body:
     attributes:
       label: Install log tail
       description: >-
-        Relevant tail of /var/log/palette-agent-install.log on the
-        target host. Skip if the failure happened before the installer
-        ran.
+        Relevant tail of the install log on the target host. Skip if
+        the failure happened before the installer ran.
       render: shell
     validations:
       required: false
   - type: textarea
     id: journal
     attributes:
-      label: journalctl tail for spectro-palette-agent-* services
+      label: journalctl tail for the agent services
       description: >-
-        Skip if the failure happened before the agent services were
+        Skip if the failure happened before any services were
         installed.
       render: shell
     validations:

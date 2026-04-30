@@ -5,14 +5,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Please confirm the request is in scope for this repo:
-
-        - Central agent mode only (no local-management appliance flow)
-        - Palette SaaS endpoint only (no private API key flow)
-        - Debian-family or RedHat-family edge hosts
-
-        Out-of-scope requests are unlikely to land — open them in a
-        different repo or with Spectro support instead.
+        This repo prepares Debian-family or RedHat-family hosts to run
+        the agent installer in central mode. Requests that change host
+        preparation, add OS support, or expose new variables fit here.
+        Requests about behavior of upstream products do not.
   - type: textarea
     id: problem
     attributes:
