@@ -9,6 +9,10 @@ palette_vip_skip: false
 palette_http_proxy: ""
 palette_https_proxy: ""
 palette_install_workdir: /opt/palette-agent
+
+# Optional installer checksum, e.g. "sha256:abc123...".
+# When set, get_url verifies the download. Leave empty to skip verification.
+palette_installer_checksum: ""
 palette_reboot_after_install: true
 palette_reboot_timeout: 1800
 
@@ -20,3 +24,9 @@ palette_stylus_extra: {}
 
 palette_configure_cilium_firewalld: false
 palette_cilium_firewalld_zone: public
+
+# Suppress the Palette TUI on the edge host. When true, the playbook masks
+# spectro-palette-tui.service and pins it disabled via a systemd preset so
+# cluster deploy cannot re-enable it. The same value is rendered into the
+# user-data stylus.disableTui field. Set false to keep the TUI available.
+palette_disable_tui: true

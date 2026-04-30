@@ -22,6 +22,7 @@
         echo "python3 is required and no supported package manager found" >&2;
         exit 1
       changed_when: false
+      tags: [bootstrap]
 
 - name: Install Spectro Cloud Palette agent host
   hosts: palette_edge_hosts
@@ -74,21 +75,41 @@
       - 53/udp
       - 443/tcp
   pre_tasks:
-    - name: Validate high-level variables
+    - name: Validate management mode
       assert:
         that:
           - palette_management_mode == 'central'
+        fail_msg: >-
+          palette_management_mode must be 'central' (got
+          '{{ palette_management_mode | default("<unset>") }}').
+          This repo only supports SaaS central agent mode.
+      tags: [always]
+
+    - name: Validate registration token
+      assert:
+        that:
           - palette_registration_token | default('') | length > 0
           - >-
             palette_registration_token ==
             (palette_registration_token | trim)
+        fail_msg: >-
+          palette_registration_token is missing or has surrounding
+          whitespace. Set it in group_vars/secrets.yml (no leading
+          or trailing spaces).
+      tags: [always]
+
+    - name: Validate project name
+      assert:
+        that:
           - palette_project_name | default('') | length > 0
           - >-
             palette_project_name ==
             (palette_project_name | trim)
-        fail_msg: >
-          Review group_vars and secrets before running the
-          SaaS central agent mode playbook.
+        fail_msg: >-
+          palette_project_name is missing or has surrounding
+          whitespace. Set it in group_vars/all.yml (no leading
+          or trailing spaces).
+      tags: [always]
 
     - name: Determine if target uses local connection
       set_fact:
@@ -96,6 +117,7 @@
           {{
             (ansible_connection | default('ssh')) == 'local'
           }}
+      tags: [always]
 
     - name: Normalize Palette endpoint and architecture values
       set_fact:
@@ -129,17 +151,20 @@
                   )
               )
           }}
+      tags: [always]
 
     - name: Refresh apt cache on Debian-based hosts
       apt:
         update_cache: true
         cache_valid_time: 3600
       when: ansible_os_family == 'Debian'
+      tags: [packages, prereqs]
 
     - name: Refresh dnf cache on RedHat-based hosts
       dnf:
         update_cache: true
       when: ansible_os_family == 'RedHat'
+      tags: [packages, prereqs]
 
   tasks:
     - name: Install SpectroCloud prerequisites on Debian-based hosts
@@ -147,6 +172,7 @@
         name: "{{ palette_ubuntu_packages }}"
         state: present
       when: ansible_os_family == 'Debian'
+      tags: [packages, prereqs]
 
     - name: Install SpectroCloud prerequisites on RedHat-based hosts
       dnf:
@@ -161,12 +187,14 @@
           }}
         state: present
       when: ansible_os_family == 'RedHat'
+      tags: [packages, prereqs]
 
     - name: Ensure installation work directory exists
       file:
         path: "{{ palette_install_workdir }}"
         state: directory
         mode: '0755'
+      tags: [prereqs, install]
 
     - name: Compute installer filename
       set_fact:
@@ -176,11 +204,13 @@
             if palette_use_fips
             else 'palette-agent-install.sh'
           }}
+      tags: [always]
 
     - name: Configure SELinux for Rocky Linux FIPS installs
       when:
         - palette_use_fips
         - ansible_distribution == 'Rocky'
+      tags: [selinux]
       block:
         - name: Check current rsync SELinux boolean
           command: getsebool rsync_full_access
@@ -274,19 +304,42 @@
             - palette_grub_update is defined
             - palette_grub_update.changed
 
+        - name: Re-check cgroup version after reboot
+          command: stat -fc %T /sys/fs/cgroup
+          register: palette_cgroup_fs_post
+          changed_when: false
+          when:
+            - palette_cgroup_fs.stdout != 'cgroup2fs'
+            - palette_grub_update is defined
+            - palette_grub_update.changed
+
+        - name: Assert cgroup v2 is active after reboot
+          assert:
+            that:
+              - palette_cgroup_fs_post.stdout == 'cgroup2fs'
+            fail_msg: >-
+              cgroup v2 was requested via grub but /sys/fs/cgroup
+              is still {{ palette_cgroup_fs_post.stdout }} after reboot.
+              Inspect /etc/default/grub and the active kernel cmdline
+              before re-running.
+          when:
+            - palette_cgroup_fs.stdout != 'cgroup2fs'
+            - palette_grub_update is defined
+            - palette_grub_update.changed
+
     - name: Gather service facts before optional firewalld changes
       service_facts:
       when:
-        - palette_use_fips
         - palette_configure_cilium_firewalld
         - ansible_os_family == 'RedHat'
+      tags: [firewall]
 
-    - name: Configure firewalld for Cilium on Rocky Linux FIPS installs
+    - name: Configure firewalld for Cilium
       when:
-        - palette_use_fips
         - palette_configure_cilium_firewalld
         - ansible_os_family == 'RedHat'
         - "'firewalld.service' in ansible_facts.services"
+      tags: [firewall]
       block:
         - name: Open required firewalld ports
           command: >-
@@ -294,28 +347,63 @@
             --zone={{ palette_cilium_firewalld_zone }}
             --add-port={{ item }}
           loop: "{{ palette_firewalld_ports }}"
-          changed_when: true
+          register: palette_firewalld_ports_result
+          changed_when: >-
+            'ALREADY_ENABLED'
+            not in palette_firewalld_ports_result.stderr
+          failed_when:
+            - palette_firewalld_ports_result.rc != 0
+            - >-
+              'ALREADY_ENABLED'
+              not in palette_firewalld_ports_result.stderr
 
         - name: Allow ESP protocol for IPsec
           command: >-
             firewall-cmd --permanent
             --zone={{ palette_cilium_firewalld_zone }}
             --add-protocol=esp
-          changed_when: true
+          register: palette_firewalld_esp_result
+          changed_when: >-
+            'ALREADY_ENABLED'
+            not in palette_firewalld_esp_result.stderr
+          failed_when:
+            - palette_firewalld_esp_result.rc != 0
+            - >-
+              'ALREADY_ENABLED'
+              not in palette_firewalld_esp_result.stderr
 
         - name: Allow NAT masquerading
           command: firewall-cmd --permanent --add-masquerade
-          changed_when: true
+          register: palette_firewalld_masq_result
+          changed_when: >-
+            'ALREADY_ENABLED'
+            not in palette_firewalld_masq_result.stderr
+          failed_when:
+            - palette_firewalld_masq_result.rc != 0
+            - >-
+              'ALREADY_ENABLED'
+              not in palette_firewalld_masq_result.stderr
 
         - name: Reload firewalld
           command: firewall-cmd --reload
           changed_when: true
+          when: >-
+            palette_firewalld_ports_result.changed
+            or palette_firewalld_esp_result.changed
+            or palette_firewalld_masq_result.changed
 
     - name: Render central management user-data
       template:
         src: user-data-central.yml.j2
         dest: "{{ palette_install_workdir }}/user-data"
         mode: '0600'
+      tags: [install]
+
+    - name: Check whether Palette agent is already installed
+      stat:
+        path: /etc/systemd/system/spectro-palette-agent-bootstrap.service
+      register: palette_agent_unit
+      tags: [always]
 
     - name: Download central management installer for Palette SaaS
       get_url:
@@ -326,21 +414,60 @@
           }}
         dest: "{{ palette_install_workdir }}/{{ palette_installer_script }}"
         mode: '0755'
+        checksum: >-
+          {{
+            palette_installer_checksum
+            | default('', true)
+            | ternary(palette_installer_checksum, omit)
+          }}
       environment: "{{ palette_proxy_env }}"
+      when: not palette_agent_unit.stat.exists
+      tags: [install]
 
     - name: Run central management installer
-      shell: >-
-        set -o pipefail;
-        {{ palette_install_workdir }}/{{ palette_installer_script }}
-        2>&1 | tee /var/log/palette-agent-install.log
-      args:
-        executable: /bin/bash
-      environment: >-
-        {{
-          palette_proxy_env
-          | combine({'USERDATA': palette_install_workdir ~ '/user-data'})
-        }}
-      changed_when: true
+      tags: [install]
+      block:
+        - name: Execute installer script
+          shell: >-
+            set -o pipefail;
+            {{ palette_install_workdir }}/{{ palette_installer_script }}
+            2>&1 | tee /var/log/palette-agent-install.log
+          args:
+            executable: /bin/bash
+            creates: /etc/systemd/system/spectro-palette-agent-bootstrap.service
+          environment: >-
+            {{
+              palette_proxy_env
+              | combine({'USERDATA': palette_install_workdir ~ '/user-data'})
+            }}
+          changed_when: true
+      rescue:
+        - name: Capture installer log tail for diagnostics
+          command: tail -n 200 /var/log/palette-agent-install.log
+          register: palette_install_log_tail
+          changed_when: false
+          failed_when: false
+
+        - name: Capture recent system journal for diagnostics
+          command: journalctl -n 200 --no-pager
+          register: palette_install_journal_tail
+          changed_when: false
+          failed_when: false
+
+        - name: Show installer failure diagnostics
+          debug:
+            msg: |
+              Palette installer failed. Diagnostic context follows.
+              ----- /var/log/palette-agent-install.log (tail 200) -----
+              {{ palette_install_log_tail.stdout | default('<no log>') }}
+              ----- journalctl -n 200 -----
+              {{ palette_install_journal_tail.stdout | default('<none>') }}
+
+        - name: Fail after installer diagnostics
+          fail:
+            msg: >-
+              Palette installer exited non-zero. See diagnostics above
+              and /var/log/palette-agent-install.log on the target.
 
     - name: Reboot host after agent install
       reboot:
@@ -350,6 +477,8 @@
       when:
         - palette_reboot_after_install
         - not palette_is_local_connection
+        - not palette_agent_unit.stat.exists
+      tags: [install, reboot]
 
     - name: Skip automatic reboot when running with local connection
       debug:
@@ -360,6 +489,8 @@
       when:
         - palette_reboot_after_install
         - palette_is_local_connection
+        - not palette_agent_unit.stat.exists
+      tags: [install, reboot]
 
     - name: Ensure required Palette units are enabled
       ansible.builtin.systemd:
@@ -373,12 +504,14 @@
         - spectro-palette-agent-bootstrap.service
         - spectro-palette-agent-reconcile.service
         - spectro-palette-agent-reconcile.timer
+      tags: [services]
 
     - name: Ensure reconcile timer is active
       ansible.builtin.systemd:
         name: spectro-palette-agent-reconcile.timer
         enabled: true
         state: started
+      tags: [services]
 
     - name: Start initial Palette registration services
       ansible.builtin.systemd:
@@ -388,12 +521,50 @@
         - spectro-palette-agent-network.service
         - spectro-palette-agent-bootstrap.service
         - spectro-palette-agent-reconcile.service
+      tags: [services]
 
-    - name: Disable Palette TUI service
+    # The TUI service is intentionally re-enabled by stylus when a cluster
+    # is deployed onto a registered edge host (preset replays disable→enable).
+    # Masking is the only state that survives `systemctl preset`. The preset
+    # drop-in below is belt-and-suspenders for vendors that explicitly unmask.
+    - name: Mask Palette TUI service so cluster deploy cannot re-enable it
       ansible.builtin.systemd:
         name: spectro-palette-tui.service
-        enabled: false
+        masked: true
         state: stopped
+      when: palette_disable_tui
+      tags: [services]
+
+    - name: Ensure systemd preset directory exists
+      file:
+        path: /etc/systemd/system-preset
+        state: directory
+        mode: '0755'
+      when: palette_disable_tui
+      tags: [services]
+
+    - name: Pin Palette TUI service to disabled via systemd preset
+      copy:
+        dest: /etc/systemd/system-preset/00-disable-palette-tui.preset
+        mode: '0644'
+        content: |
+          disable spectro-palette-tui.service
+      when: palette_disable_tui
+      tags: [services]
+
+    - name: Unmask Palette TUI service when TUI is requested
+      ansible.builtin.systemd:
+        name: spectro-palette-tui.service
+        masked: false
+      when: not palette_disable_tui
+      tags: [services]
+
+    - name: Remove TUI-disable systemd preset when TUI is requested
+      file:
+        path: /etc/systemd/system-preset/00-disable-palette-tui.preset
+        state: absent
+      when: not palette_disable_tui
+      tags: [services]
 
     - name: Collect Palette agent service logs
       command: >-
@@ -405,6 +576,7 @@
         --no-pager
       register: palette_agent_service_logs
       changed_when: false
+      tags: [validation]
 
     - name: Validate Palette agent services produced logs
       assert:
@@ -413,9 +585,11 @@
         fail_msg: >-
           Palette agent services did not produce logs after install.
           Check /var/log/palette-agent-install.log and systemd state.
+      tags: [validation]
 
     - name: Summarize next validation step
       debug:
         msg: >-
           Host preparation is complete and post-install checks passed.
           Validate edge host registration and health in Palette.
+      tags: [validation]
