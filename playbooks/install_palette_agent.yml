@@ -573,6 +573,9 @@
       when: palette_disable_tui
       tags: [services]
 
+    # Cannot use the systemd module here: it errors on unknown units, and
+    # whether the unit is known is exactly what we are probing for.
+    # noqa: command-instead-of-module
     - name: Check whether Palette TUI unit is known to systemd
       command: systemctl list-unit-files spectro-palette-tui.service
       register: palette_tui_unit_files
