@@ -558,12 +558,36 @@
     # is deployed onto a registered edge host (preset replays disable→enable).
     # Masking is the only state that survives `systemctl preset`. The preset
     # drop-in below is belt-and-suspenders for vendors that explicitly unmask.
+    #
+    # We mask via a /dev/null symlink rather than `systemd: masked: true` so
+    # this works pre-emptively: on a fresh install the TUI unit file isn't on
+    # disk yet (it's dropped later in the agent lifecycle), and the systemd
+    # module errors out on unknown units. The symlink is exactly what
+    # `systemctl mask` writes, so systemd honors it whenever the unit appears.
     - name: Mask Palette TUI service so cluster deploy cannot re-enable it
+      file:
+        src: /dev/null
+        dest: /etc/systemd/system/spectro-palette-tui.service
+        state: link
+        force: true
+      when: palette_disable_tui
+      tags: [services]
+
+    - name: Check whether Palette TUI unit is known to systemd
+      command: systemctl list-unit-files spectro-palette-tui.service
+      register: palette_tui_unit_files
+      changed_when: false
+      failed_when: false
+      tags: [services]
+
+    - name: Stop Palette TUI service if it is currently loaded
       ansible.builtin.systemd:
         name: spectro-palette-tui.service
-        masked: true
         state: stopped
-      when: palette_disable_tui
+        daemon_reload: true
+      when:
+        - palette_disable_tui
+        - "'spectro-palette-tui.service' in palette_tui_unit_files.stdout"
       tags: [services]
 
     - name: Ensure systemd preset directory exists
@@ -584,9 +608,15 @@
       tags: [services]
 
     - name: Unmask Palette TUI service when TUI is requested
+      file:
+        path: /etc/systemd/system/spectro-palette-tui.service
+        state: absent
+      when: not palette_disable_tui
+      tags: [services]
+
+    - name: Reload systemd after TUI unmask
       ansible.builtin.systemd:
-        name: spectro-palette-tui.service
-        masked: false
+        daemon_reload: true
       when: not palette_disable_tui
       tags: [services]
 
