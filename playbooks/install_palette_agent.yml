@@ -540,6 +540,9 @@
         state: started
       tags: [services]
 
+    # On local runs we skipped the post-install reboot, so these boot-time
+    # units have unmet ordering deps and `state: started` would hang. They
+    # are already enabled above and will come up on the user's manual reboot.
     - name: Start initial Palette registration services
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -548,6 +551,7 @@
         - spectro-palette-agent-network.service
         - spectro-palette-agent-bootstrap.service
         - spectro-palette-agent-reconcile.service
+      when: not palette_is_local_connection
       tags: [services]
 
     # The TUI service is intentionally re-enabled by stylus when a cluster
@@ -603,6 +607,7 @@
         --no-pager
       register: palette_agent_service_logs
       changed_when: false
+      when: not palette_is_local_connection
       tags: [validation]
 
     - name: Validate Palette agent services produced logs
@@ -612,11 +617,18 @@
         fail_msg: >-
           Palette agent services did not produce logs after install.
           Check /var/log/palette-agent-install.log and systemd state.
+      when: not palette_is_local_connection
       tags: [validation]
 
     - name: Summarize next validation step
       debug:
         msg: >-
+          {% if palette_is_local_connection %}
+          Host preparation is complete. Reboot this machine manually to
+          activate the Palette agent boot-time services, then validate
+          edge host registration and health in Palette.
+          {% else %}
           Host preparation is complete and post-install checks passed.
           Validate edge host registration and health in Palette.
+          {% endif %}
       tags: [validation]
